@@ -1,0 +1,195 @@
+{
+  "name": "Mike Moss — Lead Bot",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot — Mike Moss"
+        }
+      }
+    },
+    {
+      "id": "2",
+      "name": "Filter — Ignore Bot Messages",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.message.from.is_bot }}",
+              "value2": true,
+              "operation": "notEqual"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3",
+      "name": "Claude — Parse Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "JSON",
+              "value": "={{ JSON.stringify({ model: 'claude-opus-4-6', max_tokens: 1024, system: `You are a property lead management assistant for a commercial property brokerage team in Durban, South Africa. The team has three brokers: Nico (North), Mike (South), Dave (West).\n\nAnalyse the Telegram message and return a JSON object with these fields:\n- action: \"new_lead\" | \"update_lead\" | \"status_change\" | \"ignore\"\n- lead_id: string or null (if referencing an existing lead by ID)\n- company: string or null\n- contact_person: string or null\n- contact_number: string or null\n- contact_email: string or null\n- lead_originator: string or null (who generated the lead)\n- assigned_broker: string or null (Nico / Mike / Dave)\n- area: \"North\" | \"South\" | \"West\" | null\n- lead_source: string or null (Prop24 / ToLet Board / Return Business / LinkedIn / Referral / Other)\n- property_type: string or null (Warehouse / Office / Retail / Land / Other)\n- size_m2: number or null\n- power_amps: number or null\n- budget_pm2: number or null\n- location_preference: string or null\n- timeline: string or null\n- notes: string or null\n- status: string or null (New / Active / Viewing / Negotiating / Closed / Dead)\n- commission_split: string or null (e.g. \"50/50 Mike/Nico\")\n- reply_message: string (a short confirmation to post back to the group, friendly and brief)\n\nReturn ONLY valid JSON, no extra text.`, messages: [{ role: 'user', content: $json.message.text }] }) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "jsCode": "const body = JSON.parse($input.first().json.body || $input.first().json);\nconst content = body.content[0].text;\nconst parsed = JSON.parse(content);\nreturn [{ json: parsed }];"
+      }
+    },
+    {
+      "id": "5",
+      "name": "Route — New vs Update",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            { "value2": "new_lead", "output": 0 },
+            { "value2": "update_lead", "output": 1 },
+            { "value2": "status_change", "output": 1 },
+            { "value2": "ignore", "output": 2 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Sheets — Append New Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1250, 150],
+      "parameters": {
+        "operation": "append",
+        "documentId": "GOOGLE_SHEET_ID",
+        "sheetName": "Leads",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Lead ID": "={{ 'L' + Date.now() }}",
+            "Date": "={{ new Date().toLocaleDateString('en-ZA') }}",
+            "Lead Originator": "={{ $json.lead_originator }}",
+            "Assigned Broker": "={{ $json.assigned_broker }}",
+            "Area": "={{ $json.area }}",
+            "Company Enquiring": "={{ $json.company }}",
+            "Contact Person": "={{ $json.contact_person }}",
+            "Contact Number": "={{ $json.contact_number }}",
+            "Contact Email": "={{ $json.contact_email }}",
+            "Lead Source": "={{ $json.lead_source }}",
+            "Property Type": "={{ $json.property_type }}",
+            "Size Required (m²)": "={{ $json.size_m2 }}",
+            "Power (Amps)": "={{ $json.power_amps }}",
+            "Budget (R/m²)": "={{ $json.budget_pm2 }}",
+            "Location Preference": "={{ $json.location_preference }}",
+            "Timeline": "={{ $json.timeline }}",
+            "Notes": "={{ $json.notes }}",
+            "Status": "=New",
+            "Commission Split": "={{ $json.commission_split }}",
+            "Last Updated": "={{ new Date().toISOString() }}"
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — Mike Moss"
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Sheets — Find Existing Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1250, 350],
+      "parameters": {
+        "operation": "lookup",
+        "documentId": "GOOGLE_SHEET_ID",
+        "sheetName": "Leads",
+        "lookupColumn": "Company Enquiring",
+        "lookupValue": "={{ $json.company }}"
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — Mike Moss"
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Telegram — Reply to Group",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1500, 300],
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.reply_message }}"
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot — Mike Moss"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": { "main": [[{ "node": "Filter — Ignore Bot Messages", "type": "main", "index": 0 }]] },
+    "Filter — Ignore Bot Messages": { "main": [[{ "node": "Claude — Parse Message", "type": "main", "index": 0 }]] },
+    "Claude — Parse Message": { "main": [[{ "node": "Parse Claude Response", "type": "main", "index": 0 }]] },
+    "Parse Claude Response": { "main": [[{ "node": "Route — New vs Update", "type": "main", "index": 0 }]] },
+    "Route — New vs Update": {
+      "main": [
+        [{ "node": "Sheets — Append New Lead", "type": "main", "index": 0 }],
+        [{ "node": "Sheets — Find Existing Lead", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Sheets — Append New Lead": { "main": [[{ "node": "Telegram — Reply to Group", "type": "main", "index": 0 }]] },
+    "Sheets — Find Existing Lead": { "main": [[{ "node": "Telegram — Reply to Group", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
