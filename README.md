@@ -77,12 +77,23 @@ See `n8n-workflow.json` — import into your n8n cloud instance.
 6. **Google Sheets — Create / Update** — write the row
 7. **Telegram — Reply** — confirm action back to group
 
-## Setup
+## Telegram Setup (DONE)
 
-1. Create Telegram group and add brokers
-2. Create bot via @BotFather, get token
-3. Import `n8n-workflow.json` into n8n cloud
-4. Set credentials: Telegram token, Google Sheets OAuth
-5. Set webhook URL in n8n Telegram trigger node
-6. Create Google Sheet using column schema above
-7. Share sheet with the n8n Google service account
+| Item | Value |
+|------|-------|
+| Bot name | Rasmussen Leads Bot |
+| Bot username | @RasmussenLeads_bot |
+| Group | Rasmussen Properties — Leads |
+| Group Chat ID | -5177500666 |
+| Privacy mode | DISABLED (reads all messages) |
+| Bot role in group | Admin |
+
+## Remaining Setup
+
+1. Log into n8n cloud and import `n8n-workflow.json`
+2. Add Telegram credential using the bot token (in .env.example)
+3. Add Google Sheets OAuth credential
+4. Set `GOOGLE_SHEET_ID` once the master sheet is created
+5. Activate the workflow — n8n will register the webhook automatically
+6. Create Google Sheet using the column schema above
+7. Invite Nico, Mike, Dave to the Telegram group
